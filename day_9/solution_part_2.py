@@ -84,7 +84,7 @@ def solve(input_text):
         lo = bisect.bisect_right(h_ys, bottom)
         hi = bisect.bisect_left(h_ys, top)
         for i in range(lo, hi):
-            y, x_min, x_max = h_segments[i]
+            _, x_min, x_max = h_segments[i]
             # y is strictly inside (bottom < y < top)
             # Check if segment's x range overlaps with (left, right)
             if x_min < right and x_max > left:
