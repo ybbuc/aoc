@@ -36,7 +36,7 @@ def solve(input_text):
         # Only check vertical segments with x > px
         start = bisect.bisect_right(v_xs, px)
         for i in range(start, len(v_segments)):
-            x, y_min, y_max = v_segments[i]
+            _, y_min, y_max = v_segments[i]
             if y_min < py < y_max:
                 crossings += 1
         return crossings % 2 == 1
@@ -74,7 +74,7 @@ def solve(input_text):
         lo = bisect.bisect_right(v_xs, left)
         hi = bisect.bisect_left(v_xs, right)
         for i in range(lo, hi):
-            x, y_min, y_max = v_segments[i]
+            _, y_min, y_max = v_segments[i]
             # x is strictly inside (left < x < right)
             # Check if segment's y range overlaps with (bottom, top)
             if y_min < top and y_max > bottom:
