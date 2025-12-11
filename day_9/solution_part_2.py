@@ -1,3 +1,6 @@
+import bisect
+
+
 def solve(input_text):
     # Parse red tiles (vertices of the polygon in order)
     tiles = []
@@ -8,77 +11,84 @@ def solve(input_text):
     n = len(tiles)
 
     # Build segments of the polygon (consecutive tiles connected)
-    # Each segment is either horizontal (same y) or vertical (same x)
-    segments = []
+    # Separate into horizontal and vertical, with normalized coords
+    h_segments = []  # (y, x_min, x_max)
+    v_segments = []  # (x, y_min, y_max)
+
     for i in range(n):
         x1, y1 = tiles[i]
         x2, y2 = tiles[(i + 1) % n]
-        segments.append(((x1, y1), (x2, y2)))
+        if x1 == x2:  # vertical
+            v_segments.append((x1, min(y1, y2), max(y1, y2)))
+        else:  # horizontal
+            h_segments.append((y1, min(x1, x2), max(x1, x2)))
+
+    # Sort for binary search
+    # v_segments sorted by x, h_segments sorted by y
+    v_segments.sort()
+    h_segments.sort()
+    v_xs = [s[0] for s in v_segments]
+    h_ys = [s[0] for s in h_segments]
 
     def point_in_polygon(px, py):
         """Ray casting algorithm - count crossings to the right"""
         crossings = 0
-        for (x1, y1), (x2, y2) in segments:
-            if x1 == x2:  # vertical segment
-                # Check if horizontal ray from (px, py) going
-                # right crosses this segment
-                if x1 > px:  # segment is to the right
-                    min_y, max_y = min(y1, y2), max(y1, y2)
-                    if min_y < py < max_y:  # ray crosses (not touching endpoints)
-                        crossings += 1
-            # horizontal segments don't count as crossings for a horizontal ray
+        # Only check vertical segments with x > px
+        start = bisect.bisect_right(v_xs, px)
+        for i in range(start, len(v_segments)):
+            x, y_min, y_max = v_segments[i]
+            if y_min < py < y_max:
+                crossings += 1
         return crossings % 2 == 1
 
     def point_on_boundary(px, py):
         """Check if point is on the polygon boundary"""
-        for (x1, y1), (x2, y2) in segments:
-            if x1 == x2:  # vertical segment
-                if px == x1 and min(y1, y2) <= py <= max(y1, y2):
-                    return True
-            else:  # horizontal segment
-                if py == y1 and min(x1, x2) <= px <= max(x1, x2):
-                    return True
+        # Check vertical segments at x == px
+        idx = bisect.bisect_left(v_xs, px)
+        while idx < len(v_segments) and v_segments[idx][0] == px:
+            x, y_min, y_max = v_segments[idx]
+            if y_min <= py <= y_max:
+                return True
+            idx += 1
+
+        # Check horizontal segments at y == py
+        idx = bisect.bisect_left(h_ys, py)
+        while idx < len(h_segments) and h_segments[idx][0] == py:
+            y, x_min, x_max = h_segments[idx]
+            if x_min <= px <= x_max:
+                return True
+            idx += 1
+
         return False
 
     def point_inside_or_on(px, py):
         """Check if point is inside or on boundary of polygon"""
         return point_in_polygon(px, py) or point_on_boundary(px, py)
 
-    def segment_crosses_rect_interior(seg, rx1, ry1, rx2, ry2):
+    def any_segment_crosses_rect_interior(left, right, bottom, top):
         """
-        Check if a polygon segment crosses through the interior of the
+        Check if any polygon segment crosses through the interior of the
         rectangle (not just touching the boundary).
-
-        rx1, ry1 is one corner, rx2, ry2 is opposite corner.
         """
-        (sx1, sy1), (sx2, sy2) = seg
+        # Check vertical segments with x strictly between left and right
+        lo = bisect.bisect_right(v_xs, left)
+        hi = bisect.bisect_left(v_xs, right)
+        for i in range(lo, hi):
+            x, y_min, y_max = v_segments[i]
+            # x is strictly inside (left < x < right)
+            # Check if segment's y range overlaps with (bottom, top)
+            if y_min < top and y_max > bottom:
+                return True
 
-        # Normalize rectangle bounds
-        left = min(rx1, rx2)
-        right = max(rx1, rx2)
-        bottom = min(ry1, ry2)
-        top = max(ry1, ry2)
-
-        if sx1 == sx2:  # vertical segment
-            x = sx1
-            seg_bottom = min(sy1, sy2)
-            seg_top = max(sy1, sy2)
-
-            # Segment must be strictly inside x bounds (not on edge)
-            if left < x < right:
-                # Check if segment's y range overlaps with rectangle's y range
-                if seg_bottom < top and seg_top > bottom:
-                    return True
-        else:  # horizontal segment (sy1 == sy2)
-            y = sy1
-            seg_left = min(sx1, sx2)
-            seg_right = max(sx1, sx2)
-
-            # Segment must be strictly inside y bounds (not on edge)
-            if bottom < y < top:
-                # Check if segment's x range overlaps with rectangle's x range
-                if seg_left < right and seg_right > left:
-                    return True
+        # Check horizontal segments with y strictly between bottom and top
+        lo = bisect.bisect_right(h_ys, bottom)
+        hi = bisect.bisect_left(h_ys, top)
+        for i in range(lo, hi):
+            y, x_min, x_max = h_segments[i]
+            # y is strictly inside (bottom < y < top)
+            # Check if segment's x range overlaps with (left, right)
+            if x_min < right and x_max > left:
+                return True
 
         return False
 
@@ -94,9 +104,10 @@ def solve(input_text):
                 return False
 
         # Check no polygon segment crosses through the interior
-        for seg in segments:
-            if segment_crosses_rect_interior(seg, rx1, ry1, rx2, ry2):
-                return False
+        left, right = min(rx1, rx2), max(rx1, rx2)
+        bottom, top = min(ry1, ry2), max(ry1, ry2)
+        if any_segment_crosses_rect_interior(left, right, bottom, top):
+            return False
 
         return True
 
@@ -107,8 +118,7 @@ def solve(input_text):
             x1, y1 = tiles[i]
             x2, y2 = tiles[j]
 
-            # Skip if same row or column (area would be a line,
-            # not really meaningful but let's include)
+            # Skip if same row or column
             if x1 == x2 or y1 == y2:
                 continue
 
